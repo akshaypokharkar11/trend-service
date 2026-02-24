@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: trend-service-web
+  profiles:
+    active: default
+  config:
+    import:
+      - classpath:application-default.yml
+
+server:
+  port: 8080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

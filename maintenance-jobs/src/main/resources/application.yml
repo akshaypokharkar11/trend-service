@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: trend-service-maintenance-jobs
+  config:
+    import:
+      - classpath:application-default.yml
+
+server:
+  port: 8082
+
+trend:
+  cleanup:
+    retention-days: 30
+    cron: "0 0 2 * * ?"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

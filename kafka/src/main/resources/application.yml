@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: trend-service-consumer
+  profiles:
+    active: default
+  config:
+    import:
+      - classpath:application-default.yml
+
+  kafka:
+    bootstrap-servers: localhost:9094
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+server:
+  port: 8081
+
+trend:
+  kafka:
+    topics:
+      ten-second: trend-data-10s
+      one-minute: trend-data-1m
+    consumer-groups:
+      ten-second: trend-10s-consumer-group
+      one-minute: trend-1m-consumer-group
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

@@ -1,0 +1,64 @@
+version: 2.1
+
+executors:
+  java-executor:
+    docker:
+      - image: cimg/openjdk:21.0
+    working_directory: ~/trend-service
+    resource_class: medium
+
+jobs:
+  build-and-test:
+    executor: java-executor
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - maven-{{ checksum "pom.xml" }}
+            - maven-
+      - run:
+          name: Build and Test
+          command: ./mvnw clean verify -B
+      - save_cache:
+          key: maven-{{ checksum "pom.xml" }}
+          paths:
+            - ~/.m2/repository
+      - store_test_results:
+          path: web/target/surefire-reports
+      - store_test_results:
+          path: kafka/target/surefire-reports
+      - store_artifacts:
+          path: web/target/trend-service-web.jar
+      - store_artifacts:
+          path: kafka/target/trend-service-consumer.jar
+      - persist_to_workspace:
+          root: .
+          paths:
+            - web/target/*.jar
+            - kafka/target/*.jar
+            - dbmigrator/target/*.jar
+            - maintenance-jobs/target/*.jar
+
+  docker-build:
+    executor: java-executor
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - setup_remote_docker:
+          version: 20.10.18
+      - run:
+          name: Build Docker Image
+          command: |
+            docker build -t trend-service:${CIRCLE_SHA1} .
+
+workflows:
+  build-deploy:
+    jobs:
+      - build-and-test
+      - docker-build:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only: main

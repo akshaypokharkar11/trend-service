@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: trend-service-dbmigrator
+  config:
+    import:
+      - classpath:application-db.yml
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
