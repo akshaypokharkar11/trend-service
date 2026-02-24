@@ -1,0 +1,10 @@
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+  cache:
+    type: none
