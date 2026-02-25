@@ -1,7 +1,14 @@
 package com.example.trendservice.web.controller;
 
+import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.example.trendservice.api.model.TrendData;
 import com.example.trendservice.api.model.TrendGranularity;
+import com.example.trendservice.events.producer.TrendEventProducer;
 import com.example.trendservice.web.TrendWebApplication;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,9 +18,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.support.NoOpCacheManager;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -24,19 +38,27 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
-import static org.hamcrest.Matchers.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
 @SpringBootTest(
-        classes = TrendWebApplication.class,
+        classes = {TrendWebApplication.class, TrendControllerIT.TestCacheConfig.class},
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 @AutoConfigureMockMvc
 @Testcontainers
 @DisplayName("TrendController Integration Tests")
 class TrendControllerIT {
+
+    /**
+     * Override the Redis-based CacheManager with a no-op implementation
+     * so tests don't need a real Redis instance.
+     */
+    @TestConfiguration
+    static class TestCacheConfig {
+        @Bean
+        @Primary
+        public CacheManager noOpCacheManager() {
+            return new NoOpCacheManager();
+        }
+    }
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
@@ -52,14 +74,13 @@ class TrendControllerIT {
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
         registry.add("spring.flyway.enabled", () -> "true");
         registry.add("spring.flyway.locations", () -> "classpath:db/migration");
-        // Disable Redis for integration test
-        registry.add("spring.data.redis.host", () -> "localhost");
-        registry.add("spring.data.redis.port", () -> "16379");
-        registry.add("spring.cache.type", () -> "none");
-        // Disable Kafka for web integration test
-        registry.add("spring.kafka.bootstrap-servers", () -> "localhost:19092");
-        registry.add("spring.autoconfigure.exclude", () ->
-                "org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration");
+        // Disable Kafka and Redis auto-configuration (no real Redis/Kafka in tests)
+        registry.add("spring.autoconfigure.exclude", () -> String.join(",",
+                "org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration",
+                "org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration",
+                "org.springframework.boot.actuate.autoconfigure.data.redis.RedisReactiveHealthContributorAutoConfiguration",
+                "org.springframework.boot.actuate.autoconfigure.data.redis.RedisHealthContributorAutoConfiguration"
+        ));
     }
 
     @Autowired
@@ -67,6 +88,13 @@ class TrendControllerIT {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockitoBean
+    private TrendEventProducer trendEventProducer;
+
+    /** Mock so CacheConfig can initialize without a real Redis connection */
+    @MockitoBean
+    private RedisConnectionFactory redisConnectionFactory;
 
     private Instant now;
 
